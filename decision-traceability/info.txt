@@ -1,0 +1,112 @@
+================================================================================
+DECISION-MEMORY - IMPLEMENTATION SUMMARY (info.txt)
+================================================================================
+
+Completed: 2026-01-21
+Inherits: ED-BASE (FROZEN)
+
+================================================================================
+WHAT WAS IMPLEMENTED
+================================================================================
+
+MIGRATIONS (8 Tables)
+---------------------
+✓ 001_decision_records.sql      - Core lifecycle (draft -> active -> locked)
+✓ 002_decision_inputs.sql       - Data/Document inputs with team isolation
+✓ 003_decision_contexts.sql     - Versioned constraints & assumptions
+✓ 004_decision_rationales.sql   - Explanations (Human/AI) with length limits
+✓ 005_decision_actors.sql       - Human users & AI models (prompt hashes only)
+✓ 006_decision_overrides.sql    - "First-Override-Wins" logic with auditing
+✓ 007_decision_policies.sql     - Governance rule definitions
+✓ 008_decision_risk_scores.sql  - Computed risk levels (LOW to CRITICAL)
+
+All tables:
+- Use RLS policies for team isolation
+- Reference ED-BASE teams table
+
+BACKEND SERVICES
+----------------
+✓ services/decisions.py     - Lifecycle management (lock, update)
+✓ services/inputs.py        - Input attachment with 1MB safety check
+✓ services/contexts.py      - Versioned context management
+✓ services/rationales.py    - Rationale recording with markdown support
+✓ services/actors.py        - Actor registration & anonymization
+✓ services/overrides.py     - Strict override auditing & role checks
+✓ services/policies.py      - Policy versioning and management
+✓ services/risk.py          - Score computation based on business rules
+✓ routes/decisions.py       - Flask blueprint exposing all endpoints
+
+Key Security Features Verified:
+- IdempotencyContext used for all state-changing writes
+- Transaction atomicity for complex operations
+- HMAC-signed audit logs via ED-BASE `log_event`
+- Team boundary enforcement via `require_team_access`
+
+FRONTEND (React)
+----------------
+✓ src/hooks/useDecisionApi.js   - Auth-aware API client
+✓ src/components/DecisionList   - Filtering & status badges
+✓ src/components/DecisionDetail - Aggregated view of all decision data
+✓ src/components/RationalePanel - Markdown rendering & confidence display
+✓ src/components/RiskIndicators - Score breakdown & visualized risk levels
+✓ src/components/OverrideHistory- Audit trail of interventions
+✓ src/App.jsx                   - Navigation & View switching
+
+================================================================================
+EDGE CASES HANDLED
+================================================================================
+
+1. Concurrent Submissions: Handled via ED-BASE IdempotencyContext.
+2. In-flight Overrides: Transaction isolation + SQL conditional insert ensured 
+   only the first override wins (`status='applied'`), others rejected.
+3. Session Revocation: Checked on every request via `require_auth` middleware.
+4. Role Changes: Re-verified at service level (e.g., Override requires ADMIN).
+5. Deleted Users: `decision_actors` table supports `is_anonymized` flag to 
+   preserve history without breaking refs.
+6. AI Without Explanation: Validated in `rationales.py` (confidence required).
+7. Decision Locking: `locked` status prevents further updates in all services.
+8. Input Validation: JSON size limits and type checks enforced.
+9. Replay Attacks: Idempotency keys prevent duplicate processing.
+10. Partial Failures: Database transactions ensure atomicity.
+
+================================================================================
+WHAT WAS INTENTIONALLY AVOIDED
+================================================================================
+
+- ❌ No modifications to ED-BASE code
+- ❌ No reimplementation of auth/session/audit
+- ❌ No storing of raw AI prompts (only hashes stored)
+- ❌ No business logic execution (only traceability)
+- ❌ No deletion of decision records (only soft-locking)
+
+================================================================================
+RELATIONSHIP TO ED-BASE
+================================================================================
+
+DECISION-MEMORY USES (unchanged):
+- middleware/auth.py          (session validation)
+- services/transactions.py    (ACID guarantees)
+- services/audit.py           (logging)
+- services/authorization.py   (team access)
+- services/idempotency.py     (exactly-once)
+
+DECISION-MEMORY ADDS:
+- Domain specific schema (decision_*)
+- Traceability logic
+- Risk scoring rules
+
+================================================================================
+FILES THAT MUST NOT BE MODIFIED CASUALLY
+================================================================================
+
+- backend/services/overrides.py: Contains critical "First-Wins" security logic.
+- backend/services/actors.py: Contains privacy logic for AI prompts.
+- migrations/*.sql: Schema definitions must be evolved via new migrations.
+
+================================================================================
+FINAL STATEMENT
+================================================================================
+
+ED-BASE security guarantees are fully inherited.
+DECISION-MEMORY provides the "Why" behind the "What".
+Implementation complete per decision-memory/prd.md.
